@@ -1,5 +1,3 @@
-# [THIS MODULE IS UNDER PROGRESS]
-
 # Introduction
 
 Creating an Operating System from scratch is widely considered to be one of the most challenging tasks in computer science. It involves getting to know your machine at a hardware chip level, and getting acquianted with features and quirks that you never would have to worry about at software level. However it is still an attractive challenge because creating an Operating System can reward you with knowledge and insights of Computer Science at a personal level. Regardless whether you're doing this out of passion, out of need, or just because you're curious about how this all works. The point of this guide is to walk you through all the concepts involved from a beginner stage. This chapter will involve all the knowledge you need to have before you can write your first line of code.
