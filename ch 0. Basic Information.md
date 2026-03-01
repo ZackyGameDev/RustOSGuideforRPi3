@@ -49,3 +49,11 @@ This is called the "Fetch execute cycle". Because the CPU is in a never ending l
 Do note, there are some instructions that make the CPU go to a different location in memory for the next instruction, instead of the instruction right next to the current one. These are called "Jumping" or "Branching" instructions. More on them will be discussed as needed. 
 
 Another note, the fact that the RPi3 starts executing instructions from 0x80000 instruction is completely fixed. It is just the way its processor is designed. As a systems programmer, you will encounter many design choices like these from the manufacturers of your hardware. You will just have to figure out how to deal with it and work with what there is.
+
+# Registers x0-x30 and stack pointer
+todo -- low priority
+you can probably find resources to explain this easily.
+but for example
+https://www.geeksforgeeks.org/computer-organization-architecture/different-classes-of-cpu-registers/
+https://dev.to/serputov/aarch64-x86-64-registers-and-instruction-quick-start-19bd
+https://en.wikipedia.org/wiki/Stack-based_memory_allocation
