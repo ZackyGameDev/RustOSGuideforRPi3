@@ -88,7 +88,9 @@ _start:
 
 If you've never used assembly before, this might look scary, but it's pretty simple. Let's understand this line by line. The first line defines the section this code will go to (discussed under linking further below). Then `.global _start` just means "this symbol called `_start` should be accessible globally, to all files and codes". This is just for the linking discussed further below.
 
-Next, the first lines of code (labeled under `_start`). All we're doing is loading up an address `_stack_top` in the `x0` register of the chip, and then copying that value to the `sp` register from `x0` register. We load it into `x0` first because there's no instruction to copy an address directly to `sp` register. (If this seems alien, check out ch a. Appendix on ARM registers.
+Next, the first lines of code (labeled under `_start`). All we're doing is loading up an address `_stack_top` in the `x0` register of the chip, and then copying that value to the `sp` register from `x0` register. We load it into `x0` first because there's no instruction to copy an address directly to `sp` register. 
+
+(If this seems alien, refer to chapter 0 about registers and stack)
 
 `ldr`, `mov` and `bl` are all instructions. There's probably uncountable instructions on the ARM chip. But you can google for them as you need them. Writing assembly literally just involves listing all the instructions that need to be run line by line. Sometimes those instructions might need some more specification like "which register is this instruction going to copy value to?" or "what value is this instruction dealing with?". Those are written after the instruction name, separated by commas. every line of instruction is just "INSTRUCTION ARG0, ARG1". 
 
@@ -206,13 +208,15 @@ Next, we define our sections, where we actually tell it what to put where in mem
 
 Then first section is `.text` which stands for "code". It's a very strange naming choice, but yes, sections of bytes meant to be executed as instructions are typically called as "text" in low level memory.
 
-For `.text`, we can define what the section should actually look like. So since we want the subsection we wrote `.text.boot` to be at `0x80000`, it should come first. Hence, we put `.text.boot` first and then `.text*` which means all remaining other instructions. After that the rest of the sections. `.rodata` is read only data. Values of constants defined in code, or read only strings, or string literals. Then `.data` is for variables which are initialized in the code. They are writable and mutable. Finally `.bss` is data initialized to be zero in the code, also writable.
+For `.text`, we can define what the section should actually look like. Since we want the subsection we wrote `.text.boot` to be at `0x80000`, it should come first. Hence, we put `.text.boot` first and then `.text*` which means all remaining other instructions. After that the rest of the sections. `.rodata` is read only data. Values of constants defined in code, or read only strings, or string literals. Then `.data` is for variables which are initialized in the code. They are writable and mutable. Finally `.bss` is data initialized to be zero in the code, also writable.
 
 You may have noticed we did not define sections `.text`, `.data`, `.rodata` and `.bss` ourselves. They're actually default conventional names that the compiler generates. We're just telling the linker where to put them. The only thing we defined ourselves was the subsection for `.text` called `.text.boot`.
 
-Now, remember, the `.` is a pointer, like a cursor. So now that we've put a bunch of sections, it must've moved to hold an address at the end of the last section we put. We now do `. = ALIGN(16);`. What it does is that if the address the pointer is currently at, is not divisible by 16, it will increment it till it is divisible by 16. And then we finally define the symbol `_stack_top` to be the final position of the pointer (aligned to 16 divisibility), plus, `0x4000`. That means when we set `sp` to `_stack_top` in `entry.S`, it is going to have `0x4000` size of address space avaiable to it from `_stack_top - 0x4000` -> `_stack_top`.
+Now, remember, the `.` is a pointer, like a cursor. So now that we've put a bunch of sections, it must've moved to hold an address at the end of the last section we put. We now do `. = ALIGN(16);`. What it does is that-- if the address that the pointer is currently at, is not divisible by 16, it will increment it till it is divisible by 16. And then we finally define the symbol `_stack_top` to be the final position of the pointer (aligned to 16 divisibility), plus, `0x4000`. That means when we set `sp` to `_stack_top` in `entry.S`, it is going to have `0x4000` size of address space avaiable to it from `_stack_top - 0x4000` -> `_stack_top`.
 
 If this seems alien or strange, please lookup what a "stack" is in memory.
+
+Note: We align to 16 because in AArch64 standard, stack entries are 16 byte long and are supposed to have addresses divisible by 16. That is, every stack entry address should be a multiple of 16.
 
 Finally, we have completed all the code we had to write. We can now build it
 
@@ -262,9 +266,11 @@ This will give you an output at `target/aarch64-unknown-none/release/<your_binar
 Now to convert this ELF file to raw binary image for the RPi, we use:
 ```bash
 aarch64-linux-gnu-objcopy \
-target/aarch64-unknown-none/release/at-os \
+target/aarch64-unknown-none/release/<your_binary_name>\
 -O binary kernel8.img
 ```
+
+Where <your_binary_name> depends on your create name by default.
 
 Now you have a `kernel8.img` that you can just copy to your RPi!
 
