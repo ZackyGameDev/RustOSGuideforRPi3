@@ -39,7 +39,7 @@ Do note, of course we have multiple CPUs, multiple CPUs trying to talk to the sa
 
 # UART in RPi
 
-The SoC in the RPi has two UART components. Labeled from `UART0` and `UART1`. `UART0` is of type "PL011" (PL011 doesn't mean anything here, it's just a way to identify the type of UART). UART1 is a Mini UART, not PL011. For basics, you just need to know PL011 UARTs are more thorough UARTs with their own clocks, more configuration options, bigger transmittion limits, etc. Mini UART is very barebones. Tied to the GPU clock, lesser transmittion size, less featured, etc. 
+The SoC in the RPi has two UART components. Labeled `UART0` and `UART1`. `UART0` is of type "PL011" (PL011 doesn't mean anything here, it's just a way to identify the type of UART). UART1 is a Mini UART, not PL011. For basics, you just need to know PL011 UARTs are more thorough UARTs with their own clocks, more configuration options, bigger transmittion limits, etc. Mini UART is very barebones. Tied to the GPU clock, lesser transmittion size, less featured, etc. 
 
 Now, it is our responsibility to tell the RPi that we wish to use a UART, and that we need to set one of the pins in our RPi to be tx and rx for the UART. Actually reading and writing can come later. 
 
