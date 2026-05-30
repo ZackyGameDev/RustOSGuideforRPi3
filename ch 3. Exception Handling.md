@@ -1,6 +1,6 @@
 # below document is currently under progress
 
-# Hardware Exceptinos
+# Hardware Exceptions
 
 You may already be familiar with what an exception is in programming. It is when you write some code which does something it is not supposed to do and your computer screams at you. Stuff like dividing by zero, using a variable that was never defined, etc.
 
