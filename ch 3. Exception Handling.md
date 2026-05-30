@@ -190,7 +190,8 @@ println!("Current EL is: EL{}", get_current_el()).unwrap();
 
 You get output:
 ```
-1
+Current EL is: EL1
+
 ```
 That means our EL is successfully EL1!
 
