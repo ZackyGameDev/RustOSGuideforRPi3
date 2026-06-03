@@ -955,30 +955,6 @@ pub enum ExceptionSource {
 #[repr(C)]
 pub struct ExceptionContext {
     pub etype: ExceptionType, // u8
-    pub esource: ExceptionSource, // u8use crate::println;
-
-#[repr(u8)]
-#[derive(Copy, Clone)]
-pub enum ExceptionType {
-    _SYNC,
-    _IRQ,
-    _FIQ,
-    _SE,
-}
-
-#[repr(u8)]
-#[derive(Copy, Clone)]
-pub enum ExceptionSource {
-    _EL1t,
-    _EL1h,
-    _EL064,
-    _EL032,
-}
-
-
-#[repr(C)]
-pub struct ExceptionContext {
-    pub etype: ExceptionType, // u8
     pub esource: ExceptionSource, // u8
     pub _padding: [u8; 6], // because this struct follows c style repr
     pub x: [u64; 31],   // x0–x30
