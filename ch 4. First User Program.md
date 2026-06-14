@@ -266,7 +266,7 @@ fn panic(_info: &PanicInfo) -> ! {
 }
 ```
 
-`user/bin/init`
+`user/bin/init.rs`
 ```rs
 #![no_std]
 #![no_main]
