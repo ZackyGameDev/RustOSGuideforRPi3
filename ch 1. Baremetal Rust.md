@@ -155,7 +155,7 @@ panic = "abort"
 panic = "abort"
 ```
 
-This is going to change the behaviour on panic, from unwind to abort. So Rust will not try to do any additional behaviour upon panic, it will simply call our panic handler and pass it a `PanicInfo` object.
+This is going to change the behaviour on panic, from unwind to abort. So Rust will not try to do any additional behaviour upon panic, it will simply call our panic handler and pass it a `PanicInfo` object. No unwinding will be attempted.
 
 Now this wraps up our Rust code. 
 
@@ -165,9 +165,11 @@ Now this wraps up our Rust code.
 
 Finally the part where we start putting together all our project to compile, build and produce a single file to give to the RPi.
 
-In chapter 0 I mentioned that you will be able to tell RPi, which memory addresses to put what code or what data in when booting it. The way it works is the following: When you compile your code (by using the build commands we will talk about in a bit), all the files in your code are first compiled, i.e. translated to machine code. Then something called the "Linker" combines all those machine codes into a single file. Which we give to our raspberry pi; to copy to the memory after booting. Now RPi will always just copy the entire file exactly one to one to it's memory. so data at address 0x80000 in the file will be copied to the same address 0x80000 in the memory. So to decide what data goes to which memory, you have to put it at the correct place in the compiled file itself. 
+In chapter 0 I mentioned that you will be able to tell RPi, which memory addresses to put what code or what data in when booting it. The way it works is the following: When you compile your code (by using the build commands we will talk about in a bit), all the files in your code are first compiled, i.e. translated to machine code. Then something called the "Linker" combines all those machine codes into a single file. Which we give to our raspberry pi; to copy to the memory after booting. Now RPi will always just copy the entire file exactly one to one to it's memory. so data from addres 0x00000 in the file will be copied to the address 0x80000 in the memory and so on. So to decide what data goes to which memory, you have to put it at the correct place in the compiled file itself. 
 
-Since it is the Linker who combines all the code into a single file, it also provides us the option to let it know which code should go to which addresses in the final compiled file. This is done through something called a "Linker script". To be exact, we're going to give a "label" to our code which we want to run immediately after RPi boots. And tell the linker to put all the code with that label at the address "0x80000". (Because as discussed last chapter, that is the hard fixed address that RPi starts executing instructions from after booting).
+Since it is the Linker who combines all the code into a single file, it also provides us the option to let it know which code can be expected to go to which addresses when the final compiled file will run. This is done through something called a "Linker script". To be exact, we're going to give a "label" to our code which we want to run immediately after RPi boots. And tell the linker to put all the code with that label at the address "0x80000". (Because as discussed last chapter, that is the hard fixed address that RPi starts executing instructions from after booting).
+
+To be exact, when we say we tell the linker to put all the code at address 0x80000, it doesn't mean that the data will start at that address _inside_ the file. No in fact, it means that when this code is running, it can be expected to reside in the address 0x80000 in memory. So all the instruction bytes in our final file will expect other data to be found in the addresses specified by linker.
 
 The linker, and in general our `cargo build` command will actually produce something called an "ELF" file (stands for executable and linkable format). It is basically the format of `.exe` files followed by Unix systems (including linux). You can read about them more, but mainly what you need to know is that ELF files are meant to be run, so they have an entry point, and some additional information about them in the first couple bytes called "header". But what our RPi expects is literally just a snapshot or "image" of what the RAM should look like. That file is called "kernel8.img" (this filename is fixed, RPi will look for this exact file name). RPi just loads this file as is to memory. 
 
@@ -216,7 +218,7 @@ Now, remember, the `.` is a pointer, like a cursor. So now that we've put a bunc
 
 If this seems alien or strange, please lookup what a "stack" is in memory.
 
-Note: We align to 16 because in AArch64 standard, stack entries are 16 byte long and are supposed to have addresses divisible by 16. That is, every stack entry address should be a multiple of 16.
+Note: We align to 16 because in AArch64 standard, stack pointer is always expected to be 16 aligned whenever a function is called. That is, every stack entry address should be a multiple of 16.
 
 Finally, we have completed all the code we had to write. We can now build it
 
@@ -294,7 +296,7 @@ Any time you make a change to your code, just do `cargo clean` before running th
 use core::panic::PanicInfo;
 
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn main() -> ! {
     loop {}
 }
 
