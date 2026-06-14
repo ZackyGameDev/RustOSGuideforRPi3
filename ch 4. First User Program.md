@@ -24,7 +24,7 @@ However, recall that we actually are supposed to have user programs to run in EL
 
 # User project
 
-Firstly lets start off by creating said user project. with the following in our project directory.
+Firstly lets start off by creating said user project. with the following in our project directory at `src/`.
 
 ```cargo new user```
 
