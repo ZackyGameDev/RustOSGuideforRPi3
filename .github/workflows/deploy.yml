@@ -1,9 +1,9 @@
-# .github/workflows/deploy.yml
-name: Build and deploy mdBook
+name: Build and Deploy Book
 
 on:
   push:
-    branches: [gh-pages-website]
+    branches:
+      - gh-pages-website
 
 permissions:
   contents: write
@@ -17,9 +17,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - run: cargo install mdbook
+      - name: Install mdBook
+        run: cargo install mdbook
 
-      - run: mdbook build
+      - name: Build
+        run: mdbook build
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
