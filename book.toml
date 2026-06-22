@@ -2,3 +2,6 @@
 title = "Rust OS Guide for Rasperry Pi 3"
 authors = ["ZackyGameDev"]
 language = "en"
+
+[output.html]
+no-section-label = true
