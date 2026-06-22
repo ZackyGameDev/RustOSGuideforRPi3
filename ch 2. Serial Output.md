@@ -1,10 +1,10 @@
-# UART
-
-## Preface
+# Chapter 2: Serial Output
 
 Imagine you had the task of sending some data, specifically, a string of characters over a wire. How would you achieve it? You would have to create a system where the characters can be expressed in the form of electronic signals and then create some standard to transmit those signals to the other person, and some standard for that other person to be able to interpret those signals back to the characters they are supposed to be.
 
-This ia a classic electronics problem, with many solutions. But one of the most common standards is the Universal Asynchronous Receiver/Transmitter, UART for short.
+This is a classic electronics problem, with many solutions. But one of the most common standards is the Universal Asynchronous Receiver/Transmitter, UART for short.
+
+## UART
 
 You don't need to know the full specifics of UART to be able to work with it in our project. So I won't explain the details here (although it is preferred if you know them). The main thing you need to know is that in UART, for the sender, they have something called a "Write wire", usually labelled "tx". And then the receiver usually has a "Read wire", usually labelled "rx".
 
