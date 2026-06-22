@@ -1,10 +1,9 @@
-# Baremetal Rust
-
-## Preface 
+# Chapter 1: Baremetal Rust
 
 Now that you know exactly how code is actually run and what it looks like after compilation, we have to actually make it run. We are trying to write an Operating System in rust. So of course we need to figure out how to make program written in rust run directly on our RPi without any underlying operating systems.
 
 ## Project init
+
 <small> NOTE: This section is for Linux (where you'll write your rust code and compile it for the Pi). If you're using a different OS some things may or may not be different. Feel free to take help from LLMs or other online resources for setting up your baremetal rust project with aarch64-unknown-none as your target.</small>
 
 Let's first initialize our bare bones project. 

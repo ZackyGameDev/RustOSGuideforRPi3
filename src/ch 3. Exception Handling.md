@@ -1,7 +1,5 @@
 # Hardware Exceptions
 
-## Preface
-
 You may already be familiar with what an exception is in programming. It is when you write some code which does something it is not supposed to do and your computer screams at you. Stuff like dividing by zero, using a variable that was never defined, etc.
 
 However, even on hardware level there are some actions which inherently you are not supposed to do. For example if you tell the CPU to read from some memory address which doesnt even exist. Such hardware exceptions are dealt with differently than the exceptions in programming languages.
