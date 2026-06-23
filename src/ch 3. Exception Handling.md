@@ -28,6 +28,8 @@ The last two will not be relevant to our project. Mainly we will be working with
 Whenever a hardware exception occurs in EL0, either the exception is handled in EL0 itself, or if needed the level is raised and exception is sent to EL1 to be handled.
 
 ## Relevant Registers
+As you know, throughout our project we send and receive data from the hardware by writing to the correct CPU registers or MMIO registers. Throughout the entire exception occuring and handling process, the CPU provides dedicated registers whose entire purposes is to either have useful information for you to read, or for you to write information to for the hardware to use. We will now discuss all the registers which are relevant to 
+
 ### `ELR_EL1`
 The name stands for "Exception Link Register for EL1". We have learned that whenever an exception occurs, the CPU will change PC to the address of the appropriate exception handler instructions. However once the exception handling instructions conclude their job and handle the exception, the program execution may need to go back to the address where it was originally executing at right before the exception occured. How does the CPU know where to go back to? or where to Return to after an exception handling?
 
