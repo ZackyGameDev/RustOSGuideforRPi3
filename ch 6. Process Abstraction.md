@@ -1,6 +1,6 @@
 # Chapter 6: Process Abstraction
 
-We already have a basic user space setup with a program running in user space in EL0, separated from the kerrnel space. Utilizing syscalls and taking input and output. However, if you've been observant you may have noticed that your device, like your computer or your mobile phone usually have more than one processes going on. How is this possible? Even if you take advantage of other CPU cores on the device, you would at most get 8 or 12 other processes executing simultaneously on an average high end device. How do operating systems handle hundreds of processes running at the same time? 
+We already have a basic user space setup with a program running in user space in EL0, separated from the kerrnel space. Utilizing syscalls and taking input and output. However, if you've been observant you may have noticed that your device, like your computer or your mobile phone usually have more than one processes going on. How is this possible? Even if you take advantage of other CPU cores on the device, with each core executing one process, you would still at most get only 8 or 12 other processes executing simultaneously; on an average high end device. How do operating systems handle hundreds of processes running at the same time? 
 
 The answer is that they don't have hundred of processing running simultaneously. It is actually a very clever Sleight of hand. Let's understand this with an example where the CPU is trying to do this illusion with two processes. 
 
