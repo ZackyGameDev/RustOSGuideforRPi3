@@ -90,7 +90,7 @@ impl ProcessContext {
 }
 ```
 
-Notice tat our `ProcessContext` implements `Defaut` trait, it makes it possible to initialize all other values to zero without needing to type it out.
+Notice that our `ProcessContext` implements `Defaut` trait, it makes it possible to initialize all other values to zero without needing to type it out.
 
 Now we can finally create our actual `Process` struct itself
 
