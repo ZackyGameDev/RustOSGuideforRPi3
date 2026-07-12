@@ -14,6 +14,10 @@ This guide is still incomplete so the final proof reading and correction is yet 
 
 My operating system which this entire guide is technically a documentation of, is named "AtOS". All the source code is pubicly available in the below linked repository. Chapters may also link to its old snapshots for reference. While this book does not accept pull requests, AtOS accepts any reasonable contributions to it. However AtOS is not meant to be a large scope operating system. It is only meant to serve as the foundation for this guide, so adding complicated features which are not covered by this guide will not be accepted.
 
+## Acknowledgements
+
+In chapter 5, the code related to input handling was contributed to the original AtOS repository by GitHub contributor Tanishq Daiya ([@tanishqdaiya](https://github.com/tanishqdaiya))
+
 ## Links 
 
 - Free online book version: [zackygamedev.github.io/RustOSGuideforRPi3](https://zackygamedev.github.io/RustOSGuideforRPi3/)
