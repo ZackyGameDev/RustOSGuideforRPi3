@@ -16,32 +16,15 @@ Now, the full form of IRQ is "Interrupt Request". These exceptions are typically
 
 Now, whenever an hardware event occurs on your machine, in some way, the electronics on your hardware recognize that event, identify that event, and send an appropriate exception to the CPU. Obviously it is not the CPU chip on the hardware which monitors every single peripheral and peripheral for possible events. There is a different part of the hardware which does this job. That part is called the **Interrupt Controller**.
 
-The interrupt controller is a component on the hardware whose job is to be the central hub of recognizing hardware events and notifying the CPU by sending an appropriate exception. Hardware events upon occuring are recognized by the interrupt controller (by signals received from the part of hardware where event occured). And then the interrupt controller records it, and triggers an IRQ exception to the CPU. There are two points in this pipeline which can be configured. First is the interrupt controller itself. It can be configured to choose which hardware events should cause an IRQ exception to the CPU, and which ones shouldn't. Next, the CPU itself can also be configured on if certain category of exceptions should straight up be ignored by it. 
+The interrupt controller is a component on the hardware whose job is to be the central hub of recognizing hardware events and notifying the CPU by sending an appropriate signal for IRQ exception. Hardware events upon occuring are recognized by the interrupt controller (by signals received from the part of hardware where event occured). And then the interrupt controller records it, and triggers an Interrupt Request to the CPU. The CPU when upon receiving the interrupt request from the Interrupt Controller, it triggers an appropriate exception to the exception handler. There are two points in this pipeline which can be configured. First is the interrupt controller itself. It can be configured to choose which hardware events should cause an IRQ exception to the CPU, and which ones shouldn't. Next, the CPU itself can also be configured on if certain category of exceptions should straight up be ignored by it. 
 
 So, the pipeline looks something like this:
-
-```mermaid
-flowchart TD
-    A[Hardware Event] --> 
-    B[Interrupt Controller]
-
-    B --> C{Is the interrupt controller configured to produce an IRQ upon this hardware event?}
-
-    C -- No --> D[Nothing Happens]
-    C -- Yes --> E[CPU Receives IRQ]
-
-    E --> F{IRQ Masked?<br/>DAIF.I}
-
-    F -- Yes --> G[CPU Ignores IRQ]
-    F -- No --> H[IRQ Exception]
-    H --> I[Exception Handler]
-```
 
 ```
 ┌─────────────────────────────┐
 │      Hardware Event         │
 └──────────────┬──────────────┘
-               │
+               │ signal sent
                ▼
 ┌─────────────────────────────┐
 │   Interrupt Controller      │
@@ -53,8 +36,10 @@ flowchart TD
          ┌─────┴───────┐
          │             │
        No│             │Yes
-         ▼             ▼
- Nothing happens   CPU receives IRQ signal
+         ▼             ▼ (CPU receives IRQ signal)
+ Nothing happens    ┌─────┐
+                    │ CPU │
+                    └─────┘
                        │
                        ▼
              is the CPU configured 
@@ -68,23 +53,21 @@ flowchart TD
                               in our CPU
                                   │
                                   ▼
-                         EL1 Exception Handler
+                      ┌───────────────────────┐
+                      │ ELI Exception Handler │
+                      └───────────────────────┘
 ```
 
+Our ultimate goal in this chapter is to set up something called a "timer interrrupt". It will be an IRQ exception that you can "schedule" ahead of time to occur after a certain duration automatically. This is the core mechanism on which our scheduler will be built. However we will talk details about that later when we implement the scheduler. First let's learn how to setup the first step of our IRQ pipeline.
 
-[hardware event]
-       ↓
-[interrupt controller] 
-       ↓
-is the interrupt controller   (no)
-configured to produce an IRQ   ->  nothing happens
-upon this hardware event?
-       ↓ (yes)
-     [CPU] receives IRQ signal
-       ↓
-is the CPU configured 
-to accept IRQ interrupts 
-right now? 
-       ↓ (yes)
-An IRQ Exception occurs 
-in our CPU
+## A Scheduled Hardware Event
+
+First of all we are going to attempt to setup the first ever step of our interrupt pipeline that we discussed above. Which is the step of actually causing the hardware event. 
+
+Our main goal is to make it so there is a certain exception caused into the CPU when `T` amount of time passes. Upon which, the timer should be reset and once again after passage of `T` amount of time, the exception must occur again. This will go infinitely.
+
+Sure you can have a part in your kernel where you have a rust counter variable of type integer, and you could just increment it and check if it has reached some threshhold value. And when the threshhold value is reached, you could execute `svc` instruction. After which the kernel shall reset the variable to zero and start incrementing it again. This could technically work. But it is difficult to be precise with this solution. Since if you want the `svc` to trigger every lets say 20ms, then you would need to somehow figure out what threshhold value the counter variable would need exactly 20ms to reach. Another issue here is that this relies on the execution of the kernel code for the variable incrementing and `svc` call. So you have to somehow make sure that this piece of code does not get interrupted and always run exactly the same amount of time on the CPU everytime. It also wastes CPU cycles, costing time in executing instructions to just increment a variable.
+
+There is in fact a better solution exactly for this scenario. Your CPU itself actually has features in it to cause an IRQ hardware event after a fixed amount of time. This feature is called the CPU TIMER. There is a component inside your CPU which actually has a register which it is continually incrementing, and when that register's value reaches a threshold value in another register, it causes an hardware event signal to the interrupt controller. 
+
+This is going to be our 
