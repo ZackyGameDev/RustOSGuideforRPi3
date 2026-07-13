@@ -1,6 +1,6 @@
 <big> Below chapter is currently under progress </big>
 
-# Chapter 7: Timer And Interrupts
+# Chapter 7: Timers And Interrupts
 
 You may already know what interrupts are by now. Typically in general computer science langauge, an interrupt simply means temporarily stopping the execution of some set of instruction and executing some instructions at a completely different location. Then returning back to the original set of instructions whose execution was interrupted. 
 
