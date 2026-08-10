@@ -11,6 +11,7 @@ You don't need to know the full specifics of UART to be able to work with it in 
 Let's say that the sender wishes to send some character to the receiver, in which case the sender's tx wire is connected to the receiver's rx wire. if the receiver also wishes to send any characters back to the sender, it must also have it's own tx wire and the sender will need it's own rx wire, both connected together. 
 
 [![UART Diagram](https://vanhunteradams.com/Protocols/UART/uart_hardware.png)](https://vanhunteradams.com/Protocols/UART/UART.html)
+
 <small> (click image to go to source) </small>
 
 The communication is digital, so the tx and rx wires have a zero or one being trasmitted, but both the devices need to agree on which voltage is considered zero. for that we have the GND (ground) pin of both the devices connected together.
@@ -55,6 +56,7 @@ Now, when the RPi boots, and the GPU is setting up the system for the CPU, when 
 
 [![UART Diagram](https://www.electronicwings.com/storage/PlatformSection/TopicContent/305/description/Raspberry%20pi%203%20UART%20pins.png)](
 https://www.electronicwings.com/raspberry-pi/raspberry-pi-uart-communication-using-python-and-c)
+
 <small> (click image to go to source) </small>
 
 Now, your CPU can simply communicate to `UART1` what string it wishes to send to the host, by writing to the correct addresses for `UART1`. `UART1` will correctly convert it to digital signals and send it to the correct pins. So the setup is technically complete on RPi side. 
