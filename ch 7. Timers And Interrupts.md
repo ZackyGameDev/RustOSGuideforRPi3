@@ -516,3 +516,121 @@ And now that we have those two things set up we have finally reached the final p
 
 ## Turning an IRQ Signal into IRQ Exception
 
+Now, when a CPU receives an IRQ signal from the hardware event, by default it will cause an exception of type IRQ to occur. But sometimes the CPU might be configured to ignore these IRQ interrupt request signals. This is configured by the DAIF register. 
+
+First you should know what it is. Sometimes in CPU, you might want to purposefully ignore a certain kind of exception from occurring. This could be because you're handling something really important so you don't want anything to interrupt it. It might also be because you've already acknowledged some interrupt so you don't want it to keep causing exceptions in the meantime. Whatever may be the case, the ARM CPU architecture provides a way just for that. It is called **interrupt masking**.
+
+This is done through the DAIF register. The name of this register is short form for, **D**ebug, **A**synchronous abort, **I**RQ, **F**IQ. Those are the different kind of interrupt requests that the CPU can receive. You may look up more information about this on their own. The register only has four bits [9:6] with a function, the rest are reserved. Each of these four bits corresponds to one of the four types of interrupt requests. When a corresponding field is set to 1, said interrupt is said to be *masked*. In that case, the CPU will ignore all interrupt requests of that corresponding type. So if you set the bit for IRQ to 1, the CPU will ignore all incoming IRQ interrupt requests, and they will not cause an exception to the exception handler.
+
+You can read about this register [here](https://support.arm.com/documentation/ddi0601/2026-06/AArch64-Registers/DAIF--Interrupt-Mask-Bits).
+
+In the above mentioned documentation you will also find that there are registers which exist just to make it easier to flip singular bits inside the DAIF register. These registers are `DAIFSet` and `DAIFClr`. In these registers the bits[3:0] corresponds to D,A,I,F respectively. In `DAIFSet` if you write some value, then in that case, whichever of the D,A,I,F bits was 1, is set to value 1 in the `DAIF` register, and whichever was 0 is ignored. Then in `DAIFClr`, it is the same, except writing a 1 to this register will set the corresponding interrupt type's field to zero value in the `DAIF` register.
+
+So to mask the IRQ interrupt requests, we can write `0b0010` to `DAIFSet`. And to unmask them, we can write same value to `DAIFClr` this time.
+
+Now, the way to configure the CPU to accept our IRQ requests and let them trigger exception handler is simple. You just need to ensure that the IRQ bit in DAIF is set to zero. This can be done by writing `0b0010` to `DAIFClr`. 
+
+Let's implement a basic method for doing this in our Interrupts abstraction. 
+
+Implemented in `struct Interrupts` 
+```rust
+    pub fn irq_disable() {
+        unsafe {
+            // Mask IRQ interrupts (Bit 1)
+            core::arch::asm!("msr DAIFSet, 0b0010",
+                             options(nostack, preserves_flags));
+        }
+    }
+
+    pub fn irq_enable() {
+        unsafe {
+            // Unmask IRQ interrupts (Bit 1)
+            core::arch::asm!("msr DAIFClr, 0b0010",
+                             options(nostack, preserves_flags));
+        }
+    }
+```
+
+Also a function if we ever want to check the current state of it:
+
+```rust
+    // Reads to check if IRQs are masked. Returns true if interrupts are
+    // currently enabled.
+    pub fn is_irq_enabled() -> bool {
+        let daif: u64;
+        unsafe {
+            core::arch::asm!("mrs {}, DAIF",
+                             out(reg) daif,
+                             options(nostack, preserves_flags));
+        }
+        // Bit 7 is A, Bit 8 is D, Bit 1 is I (IRQ Mask), Bit 0 is F
+        // If bit is 1, it means masked otherwise unmasked.
+        ((daif >> 7) & 1) == 0
+    }
+```
+
+**NOTE**
+When an exception occurs, then right before sending control to the exception handler, the CPU **automatically** sets all DAIF fields to values of 1. Basically masking all possible interrupts that can be masked. This is a ARM Architecture Design feature which makes sure that while an exception is being handled, another interrupt is unlikely to interfere with the exception handling. The original values of DAIF are restored when exception handler returns through ERET. For restoration reference these values are stored in exception's PSTATE data which is stored in `SPSR_EL1` register.
+
+I myself also implemented the following two wrapper methods to my `struct Interrupts`. Useful for masking all interrupts or unmasking all interrupts. 
+
+```rust
+    pub fn daif_unmask_all() {
+        unsafe {
+            core::arch::asm!("msr DAIFClr, 0b1111", options(nostack, preserves_flags));
+        }
+    }
+
+    pub fn daif_mask_all() {
+        unsafe {
+            core::arch::asm!("msr DAIFSet, 0b1111", options(nostack, preserves_flags));
+        }
+    }
+```
+
+You can really use your own creativity and design decisions to decide for yourself-- what all wrappers you want to be available in your abstractions. 
+
+Finally, for extra extra readability, I also added the IRQ routing method to the physical timer struct itself.
+
+```rust
+impl PhysicalTimer {
+    pub fn init_irq() {
+        Interrupts::route_timer_interrupt(TimerInterruptSource::PhysicalNonSecure, InterruptRoute::IRQ);
+    }
+}
+```
+
+
+And with that we are officially done! We successfully made sure that every part of the interrupt pipeline is implemented and configurable! 
+
+- We have a `kernel::timer` module which lets us configure a hardware timer to go off after a fixed amount of duration.
+- We have configured it to cause an IRQ hardware event when the timer expires/goes off. 
+- We then have a QA7 Interrupt Controller abstraction in `kernel::interrupts` which lets us configure the QA7. Such that:
+  - The QA7 recognizes said timemr's expiration hardware event.
+  - Upon getting it, immediately sends an IRQ signal to the CPU core 0 (the core our kernel is currently running on).
+- Then we have implemented basic methods so we are able to configure the CPU such that: 
+  - When an IRQ request signal is received from the QA7, it causes an Exception to occur of the type IRQ. 
+
+## Testing 
+
+You can test out this entire pipeline by the following procedure:
+```rust
+PhysicalTimer::init_irq();
+Interrupts::irq_enable();
+PhysicalTimer::set_seconds(2);
+PhysicalTimer::enable();
+```
+
+Then you'll see that after 2 seconds, you will get an exception! And the exception context being printed will show you that it is a IRQ type exception. Just according to plan! This exception is caused because of the timer going off after 2 seconds! You will likely keep getting IRQ exceptions repeatedly at a super high rate. This is just because of how we discussed earlier in this chapter, that the timer keeps emitting expiration hardware event to QA7 every count that the counter's expiration condition is true. Wait long enough and the exceptions will stop the moment that the timer's counter register overflows and wraps around to zero.
+
+Normally, you are supposed to turn the timer OFF upon handling its IRQ request. Since IRQ interrupts can be caused by pretty much every single hardware event there can be, there is a dedicated procedure to query QA7 to ask which hardware event caused said exception. From there you can identify if the IRQ was due to a timer. If it was you can then turn off that timer as acknowledgement of it, so it doesn't continue 'buzzing'.
+
+However this chapter has already grown very heavy and long. Thus I will conclude this chapter here and cover said concept in the next chapter, with ***Process Scheduling***. 
+
+## Final codes
+
+You can find Timer implementation in the same repository snapshot that was linked in the end of previous chapter:
+
+[github.com/ZackyGameDev/AtOS/blob/ae(...)rnel/processes.rs](https://github.com/ZackyGameDev/AtOS/blob/aef3fa0c404b7423a9ef92770c3f12e91604708e/src/kernel/processes.rs)
+
+Please note, said snapshot also includes implementation of the scheduler. So ignore it for now. it also includes methods in `struct Interrupts` that help in identifying the IRQ source. You may ignore it as well. 
