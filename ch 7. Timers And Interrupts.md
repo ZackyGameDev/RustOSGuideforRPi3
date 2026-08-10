@@ -47,7 +47,7 @@ So, the pipeline looks something like this:
                   right now?
              ┌────────┴──────────┐
              │                   │
-          Yes│                   │No
+           No│                   │Yes
              ▼                   ▼
       CPU ignores IRQ   An IRQ Exception occurs 
                               in our CPU
@@ -353,3 +353,164 @@ Notice how in this test we check if the timer expired by checking the `bit[2]` o
 We check it this way for now because our timer may send hardware event IRQ signal to the interrupt controller, but we have not yet configured the interrupt controller to actually route it back to the CPU as an IRQ Exception. Thus our CPU currently will not receive any sort of exception or interrupt even if timer works correctly. Checking if the CTL value outputs after the correct duration is the only way to test for now.
 
 However, that will change as now we will talk about configuring the interrupt controller. So our interrupt pipeline may progress further with the timer IRQ.
+
+## Interrupt Controller
+
+So far in this chapter we've mentioned the interrupt controller many times, so you must already know that all it does is serve as the observer of hardware. All hardware event signals are first sent to it. Whereby the interrupt controller then decides if the hardware signal should cause an IRQ Exception to the CPU or not. 
+
+First you need to know is that the interrupt controller is just another component within the SoC like many others. Similar to how the mini UART is a component in the SoC. And so our way to communicate with the interrupt controller is going to be same as the way with which we communicate to the mini UART component. Which is through MMIO registers described in appropriate documentation.
+
+This section we will talk about how to configure the interrupt controller on our hardware, such that upon receiving the hardware interrupt signal from the timer, it will forward an IRQ interrupt signal to the CPU.
+
+### The Quad-Core A7 Control Block 
+
+The Interrupt controller component on the RPi3B+ is often called the QA7. Because the official name of this component is the "Quad Core A7 Control". The reason for the name is not relevant. Throughout this chapter and beyond we are going to call this interrupt controller as "QA7".
+
+Just like you've been already explained, the QA7 essentially will do the job of sending an Interrupt Request (IRQ) Signal to the CPU upon the timer-went-off hardware event. The QA7 has many other features as well. It has the capability to enable sending of data between different CPU cores, it even has it's own timer component, which works separately from the four timers we've studied about so far. But all those features are irrelevant to us right now. Currently all we are trying to do is configure it so that it sends an IRQ request to the CPU upon the NSP timer going off.
+
+You can find the official documentation for this component at [https://github.com/Tekki/rasp(...)berrypi/bcm2836/QA7_rev3.4.pdf](https://github.com/Tekki/raspberrypi-documentation/blob/master/hardware/raspberrypi/bcm2836/QA7_rev3.4.pdf)
+
+You will see that it details all of its capabilities, and also how to configure them. However we're only really interested in the section about Interrupts Router. It is the part of QA7 which manages hardware interrupts to IRQ/FIQ request pipeline. It is described in the afformentioned document at the 3.2 section "Interrupt Routing".
+
+<image here>
+
+First of all you will immediately notice this diagram when you scroll to the mentioned section. This depicts the hardware event to interrupt pipeline that we've been discussing. In the center is the QA7's interrupt routing block/component. The arrows you see going towards it, represent different kind of hardware event signals that can be received by the interrupt router. You can see from the top left, firstly we have IRQ or FIQ hardware events that might come from the GPU. Then 16 "mailbox" type events which can come from *other* CPU cores trying to send some data to our current core. And then two more kind of events labelled "USB Timer" and "Spare" which could represent other events occurring across hardware. 
+
+Then on the right the block represents the CPU cores of the system. Raspberry Pi 3B+ has four ARM Cortex A53 CPU cores. So that's what this block on the right represents. From the bottom right you can see four arrows going to the interrupt router. These four arrows represent the hardware events of timers going off for each of the four timers that we've learned so far. You can see each arrow as a "4" labelled on it. This is because each of the four CPU cores has their own four timers. So total there can be theoretically `4*4 => 16` different unique timers going off on the system, and QA7 interrupt router can receive a hardware event for all of these. There's then also two last hardware events going labelled `nPMUIRQ*` and `nAXIERRIRQ`. We are not going to cover these. 
+
+Lastly, there's only four arrows going *out* of the interrupt router block. These represent the four interrupt requests that the QA7 can send to the ARM CPUs. From top right we have IRQ and FIQ interrupt requests. If you don't know yet, an FIQ is basically an IRQ which deserves a super high priority for handling. Then there's two other arrows labelled VIRQ and VFIQ. These are related to virualization in EL2 level, which we are not going to discuss within our project scope.
+
+You can read about all of this in the section 3.2 of the document.
+
+### Timer Interrupt Control Register
+
+Now, let's take a look at the MMIO registers which are useful in configuring the QA7 interrupt router. A comprehensive list of them is shown at the start of section 4. Of course we don't have to learn about all of these. Only the registers relevant to our goal of setting up the `NSP Timer Hardware Event -> IRQ Request to Core 0` pipeline.
+
+For that purpose, the only register you have to take note of is the one mentioned at section 4.6, "Core timers interrupts". 
+
+This section describes four registers:
+
+- Address: 0x4000_0040 Core 0 Timers interrupt control
+- Address: 0x4000_0044 Core 1 Timers interrupt control
+- Address: 0x4000_0048 Core 2 Timers interrupt control
+- Address: 0x4000_004C Core 3 Timers interrupt control
+
+Each four of these is basically the same register. But each one is for a different core. We are only working with a single core, core 0 in our project. So that is what we're going to look at. 
+
+This is what the description says: 
+
+> There are four core timer control and four core timer status registers. The registers allow you to enable or disable an IRQ or FIQ interrupt. They cannot clear an pending interrupts.
+
+This register is named the "Timers Interrupt Control" register. 
+
+If you read the first table under this heading, you will see that it decscribes the fields of this register. The first 8 bits are the only ones which have a function. bits[3:0] are used for timer to IRQ configuration. Each of these bits is one of the four timers. from bit 0, these bits are for the physical secure timer, physical non secure timer, hypervisor timer, and virtual timer. Writing a '`1`' to any of these fields makes it so when corresponding timer goes off, the interrupt router will send an IRQ request to the CPU.
+
+This is it! This is the setting we were looking for. In order to configure QA7 to route non-secure physical timer's going-off hardware event to cause an IRQ to the core 0 CPU, this is the register we need to write to! We need to write the value of "`1`" to the bit[1] of this register.
+
+Note that the bits[7:4] in this register serve the exact same purpose, except for FIQ instead of IRQ. They also supercede and override the corresponding IRQ bits. So if bit[5] is set to 1, then regardless of bit[1]'s state, an NSP timer going off will always cause an FIQ exception request to the CPU.
+
+So finally, if we want our CPU to receive an IRQ request upon the going off of the non-secure physical timer, we simply need to make sure bit[1] in this register is set to '`1`' and bit[5] is set to '`0`'.
+
+### Abstraction implementation
+
+Now lets add a module in our Rust project which will have the job of configuring the hardware for interrupt handling. Let this module be called "interrupts.rs", in `src/kernel/`. Let's start it off with:
+
+```rust
+use core::ptr::{read_volatile, write_volatile}; // we're handling MMIO registers
+
+/* 
+~~~~ THE DOCUMENTATION FOR THE QA7 COMPONENT CAN BE FOUND AT   
+https://github.com/Tekki/raspberrypi-documentation/blob/b1df6ea8e135254e5feb0c8bb036b2a18db8b859/hardware/raspberrypi/bcm2836/QA7_rev3.4.pdf  
+*/
+
+// QA7 Base for BCM2837 (Raspberry Pi 3)
+const QA7_BASE:             usize    = 0x4000_0000;
+
+// Core timers interrupts
+pub const CORE_0_CNT_INT_CTL:   *mut u32 = (QA7_BASE + 0x40) as *mut u32;
+```
+
+Remember to add this to our `kernel/mod.rs`!
+
+```rust
+pub mod interrupts;
+```
+
+Now, we're going to try an implement a function `route_timer_interrupt`. Which will take arguments for what timer's hardware event to route to an IRQ or FIQ.
+
+```rust
+#[repr(u8)]
+#[derive(Copy, Clone, Debug)]
+pub enum TimerInterruptSource {
+    Physical = 1 << 0,
+    PhysicalNonSecure = 1 << 1,
+    Hypervisor = 1 << 2,
+    Virtual = 1 << 3,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug)]
+pub enum InterruptRoute {
+    IRQ,
+    FIQ,
+}
+
+pub struct Interrupts;
+
+impl Interrupts {
+    pub fn route_timer_interrupt(source: TimerInterruptSource, route: InterruptRoute) {
+        let mut enable_bit: u32 = source as u32;
+
+        enable_bit = match route {
+            InterruptRoute::IRQ => enable_bit,
+            InterruptRoute::FIQ => enable_bit << 4,
+        };
+
+        unsafe {
+            let current_val: u32 = read_volatile(CORE_0_CNT_INT_CTL);
+            write_volatile(CORE_0_CNT_INT_CTL, current_val | enable_bit);
+        }
+    }
+}
+```
+
+This code looks verbose, but it is actually surprisingly simple. Firstly, in the register, bit[0] corresponds to the Secure Physical Timer, bit[1] to NSP, bit[2] to HV, bit[3] to Virtual timer. We already know that. So we've created an enum `TimerInterruptSource` which encodes this information correctly. Casting it to unsigned integer will give us a number where only the corresponding register's field's location's bit is set to 1.
+
+We also create an enum for `InterruptRoute` which signifies the two types of target routes an interrupt request can be sent. IRQ request or FIQ request. Our method then appropriately sets the corresponding bit in the MMIO register to 1. It's working should be self explanatory.
+
+Then we should also create a function to be able to clear the bit to break this routing.
+
+```rust
+    pub fn deroute_timer_interrupt(source: TimerInterruptSource) {
+        let mut disable_bit: u32 = source as u32;
+
+        // disabling the FIQ as well
+        disable_bit = disable_bit | (disable_bit << 4);
+
+        unsafe {
+            let current_val: u32 = read_volatile(CORE_0_CNT_INT_CTL);
+            write_volatile(CORE_0_CNT_INT_CTL, current_val & !disable_bit);
+        }
+    }
+```
+
+Now, for safety let's also use this method to deroute the timer interrupt before setting it in the router method:
+
+```rs
+    pub fn route_timer_interrupt(source: TimerInterruptSource, route: InterruptRoute) {
+        // first clearing the interrupt routes for the given source
+        Self::deroute_timer_interrupt(source);
+
+        /* (...rest is same as before) */
+    }
+```
+
+Now we have a safe and convenient abstraction to configure the QA7 for timer interrupts! Let's review what we have got setup so far:
+
+- We have the ARM Non-Secure Physical Timer on Core 0 abstracted. So we can configure it to fire off after some amount of time we like.
+- We have the QA7 interrupt controller abstracted. We can configure it so when a timer goes off, QA7 will send an IRQ request to the CPU.
+
+And now that we have those two things set up we have finally reached the final phase of our Interrupt Pipeline. The CPU accepting the request and it causing an IRQ type exception in the exception handler. Which the exception handler should be able to identify as hanving come from a timer going off. 
+
+## Turning an IRQ Signal into IRQ Exception
+
