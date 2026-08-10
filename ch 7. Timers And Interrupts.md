@@ -372,7 +372,9 @@ You can find the official documentation for this component at [https://github.co
 
 You will see that it details all of its capabilities, and also how to configure them. However we're only really interested in the section about Interrupts Router. It is the part of QA7 which manages hardware interrupts to IRQ/FIQ request pipeline. It is described in the afformentioned document at the 3.2 section "Interrupt Routing".
 
-<image here>
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/4570bf14-19b5-482e-9e7d-d86a583148cb" />
+
+<small>(screenshot taken from aforementioned document)</small>
 
 First of all you will immediately notice this diagram when you scroll to the mentioned section. This depicts the hardware event to interrupt pipeline that we've been discussing. In the center is the QA7's interrupt routing block/component. The arrows you see going towards it, represent different kind of hardware event signals that can be received by the interrupt router. You can see from the top left, firstly we have IRQ or FIQ hardware events that might come from the GPU. Then 16 "mailbox" type events which can come from *other* CPU cores trying to send some data to our current core. And then two more kind of events labelled "USB Timer" and "Spare" which could represent other events occurring across hardware. 
 
