@@ -1,5 +1,5 @@
 [book]
-title = "Rust OS Guide for Rasperry Pi 3"
+title = "Writing an Operating System in Rust for Raspberry Pi 3B+"
 authors = ["ZackyGameDev"]
 language = "en"
 
