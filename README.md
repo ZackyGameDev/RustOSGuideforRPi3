@@ -1,6 +1,24 @@
-## RustOSGuideforRPi3
+# Writing an Operating System in Rust
 
-This is a chapter wise beginner friendly guide to creating an Operating System for the Raspberry Pi 3 board, from scratch. This is written by me as I work on my own OS in the same condition. It serves as both as an educational guide and also a documentation of how I myself made my own OS. Naturally this means it is possible that as I discover more information, I may have to heavily amend previous writings. But still, I think it will be greatly beneficial to beginners who don't know anything.
+A beginner-friendly, step-by-step guide to building a bare-metal
+operating system from scratch in Rust for the Raspberry Pi 3 Model B+.
+
+## Introduction
+
+This book documents the development of AtOS, a small operating system
+written from scratch in Rust for the Raspberry Pi 3 Model B+. It is both
+a practical guide to operating-system development and a record of the
+decisions and implementations made while building AtOS.
+
+The guide covers bare-metal Rust and AArch64 development on the
+Raspberry Pi 3 Model B+. Although things learned in this guide
+will definitely be useful in other Raspberry Pi models, or any 
+other standard computer hardware.
+
+Naturally, as I discover more information while developing AtOS, I may
+have to amend previous chapters. The guide is written primarily for
+beginners, so concepts are introduced progressively rather than assuming
+extensive operating-system knowledge.
 
 ## Structure
 
