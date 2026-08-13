@@ -5,20 +5,14 @@ operating system from scratch in Rust for the Raspberry Pi 3 Model B+.
 
 ## Introduction
 
-This book documents the development of AtOS, a small operating system
-written from scratch in Rust for the Raspberry Pi 3 Model B+. It is both
-a practical guide to operating-system development and a record of the
-decisions and implementations made while building AtOS.
+This book documents the development of AtOS, a small operating system written from scratch in Rust for the Raspberry Pi 3 Model B+. It is both
+a practical guide to operating-system development and a record of the decisions and implementations made while building AtOS.
 
-The guide covers bare-metal Rust and AArch64 development on the
-Raspberry Pi 3 Model B+. Although things learned in this guide
-will definitely be useful in other Raspberry Pi models, or any 
-other standard computer hardware.
+The guide covers bare-metal Rust and AArch64 development on the Raspberry Pi 3 Model B+. Although things learned in this guide
+will definitely be useful in other Raspberry Pi models, or any other standard computer hardware.
 
-Naturally, as I discover more information while developing AtOS, I may
-have to amend previous chapters. The guide is written primarily for
-beginners, so concepts are introduced progressively rather than assuming
-extensive operating-system knowledge.
+Naturally, as I discover more information while developing AtOS, I may have to amend previous chapters. The guide is written primarily for
+beginners, so concepts are introduced progressively rather than assuming extensive operating-system knowledge.
 
 ## Structure
 
