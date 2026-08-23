@@ -349,3 +349,7 @@ and scheduling before moving to mutexes as much of it involves those topics.
 
 All above content for this chapter (including code) was written by a different author from the rest of the book.
 It is credited to GitHub contributor Tanishq Daiya ([@tanishqdaiya](https://github.com/tanishqdaiya)).
+
+## Code
+
+The source code for this in the original repository can be found at [https://github.com/ZackyGameDev/AtOS/bl(...)rnel/spinlock.rs](https://github.com/ZackyGameDev/AtOS/blob/02c35bb4c90bb1cac30f84e00b6db7b7bb534a1d/src/kernel/spinlock.rs)
