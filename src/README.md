@@ -28,7 +28,7 @@ My operating system which this entire guide is technically a documentation of, i
 
 ## Acknowledgements
 
-In chapter 5, the code related to input handling was contributed to the original AtOS repository by GitHub contributor Tanishq Daiya ([@tanishqdaiya](https://github.com/tanishqdaiya))
+In chapter 5, the code related to input handling was contributed to the original AtOS repository by GitHub contributor Tanishq Daiya ([@tanishqdaiya](https://github.com/tanishqdaiya)). The entirety of chapter 9, including code, was also written by the same person.
 
 ## Links 
 
