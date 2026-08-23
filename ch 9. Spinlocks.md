@@ -337,7 +337,7 @@ pub fn pop_off() {
 These set of functions do exactly as described above, while also maintaining
 checks to avoid misuse to a certain extent.
 
-# Conclusion
+## Conclusion
 
 With this, we have covered the fundamentals of concurrency, implemented a
 working version of spinlocks and hopefully established the need for concurrency
@@ -345,3 +345,7 @@ in the first place.  In the next chapter, we aim to cover a more sophisticated
 implementation of mutexes.  It is recommended that you are clear on concurrency
 and scheduling before moving to mutexes as much of it involves those topics.
 
+## Credit
+
+All above content for this chapter (including code) was written by a different author from the rest of the book.
+It is credited to GitHub contributor Tanishq Daiya ([@tanishqdaiya](https://github.com/tanishqdaiya)).
