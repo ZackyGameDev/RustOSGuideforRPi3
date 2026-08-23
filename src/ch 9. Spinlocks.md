@@ -352,4 +352,4 @@ It is credited to GitHub contributor Tanishq Daiya ([@tanishqdaiya](https://gith
 
 ## Code
 
-The source code for this in the original repository can be found at [https://github.com/ZackyGameDev/AtOS/bl(...)rnel/spinlock.rs](https://github.com/ZackyGameDev/AtOS/blob/02c35bb4c90bb1cac30f84e00b6db7b7bb534a1d/src/kernel/spinlock.rs)
+The source code for this in the original repository can be found at [github.com/ZackyGameDev/AtOS/bl(...)nel/spinlock.rs](https://github.com/ZackyGameDev/AtOS/blob/02c35bb4c90bb1cac30f84e00b6db7b7bb534a1d/src/kernel/spinlock.rs)
