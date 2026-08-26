@@ -121,7 +121,7 @@ fn handle_irq_exception(ctx: &mut ExceptionContext) -> () {
     let mut irq_sources: u32 = Interrupts::pending_irq();
 
     if irq_sources & (InterruptSource::PhysicalNonSecureTimer as u32) != 0 {
-        PhysicalTimer::handle_irq(ctx);
+        println!("[TIMER] The timer just went off!!!!")
         irq_sources &= !(InterruptSource::PhysicalNonSecureTimer as u32);
     }
 
@@ -131,3 +131,41 @@ fn handle_irq_exception(ctx: &mut ExceptionContext) -> () {
     }
 }
 ```
+
+And this completes our exception handling pipeline. An IRQ exception occurs, our rust exception handler catches it, identifies it as IRQ, and if it came from the Non Secure Physical Timer going off, it is going to print the following message:
+
+```
+[TIMER] The timer just went off!!!!
+[TIMER] The timer just went off!!!!
+...
+```
+
+Note that you will not get just a single print. Like we discussed in the last chapter, the exception will keep being triggered every time the timer's counter updates and notices the trigger condition is true. So we need to also disable the timer inside the handler.
+
+Let's add this to the top of `exceptions.rs`.
+```rust
+use crate::kernel::timer::PhysicalTimer;
+```
+
+Then add the following to our code, you can either mask the timer interrupt, or disable it, or you can just move the timer deadline forward into the future.
+
+```rust
+    if irq_sources & (InterruptSource::PhysicalNonSecureTimer as u32) != 0 {
+        PhysicalTimer::set_seconds(1); // disable irq by immedaitely scheduling it into the future
+        PhysicalTimer::disable();
+        println!("[TIMER] The timer just went off!!!!")
+        irq_sources &= !(InterruptSource::PhysicalNonSecureTimer as u32);
+    }
+```
+
+And now finally now when the timer goes off, you will see a single output message and the timer will be safely disabled. No more unnecessary timer exceptions!
+
+```
+[TIMER] The timer just went off!!!!
+```
+
+You may try this out by setting the timer in the kernel rust main. And seeing the output go off. Similar to how it was instructed in the last chapter.
+
+## Pulsing Timer
+
+(to be continued...)
