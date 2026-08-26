@@ -166,6 +166,6 @@ And now finally now when the timer goes off, you will see a single output messag
 
 You may try this out by setting the timer in the kernel rust main. And seeing the output go off. Similar to how it was instructed in the last chapter.
 
-## Pulsing Timer
+## Starting the pulse
 
 (to be continued...)
