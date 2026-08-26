@@ -28,4 +28,106 @@ Now, before we dive deeper into the scheduler architecture, let us first make th
 
 ## Identifying IRQ Exceptions
 
+In this section we're simply going to introduce a branch for the exception handling. In this new branch the exception handler will identify that the current exception came from an IRQ interrupt. It is also going to identify that among all the hardware events, it came from the timer event. 
 
+This process is similar to how we identified `svc` caused exception back in chapter 5 on syscalls. In it, firstly we narrowed the exception down to SYNC type from the exception context. And then we narrowed it down to an `svc` based exception through the information encoded in the exception syndrome register `ESR_EL1`.
+
+The process for a timer exception is the same. You know it is an IRQ from the exception context. However for narrowing it down further, instead of reading from the exception syndrome register, you need to read from a different register. This register is in fact located in the interrupt handler QA7. We can find it in [the documentation](https://github.com/Tekki/raspberrypi-documentation/blob/master/hardware/raspberrypi/bcm2836/QA7_rev3.4.pdf) we refered to in the last chapter. In it open topic **4.10 Core interrupt sources**. In it, it depicts four registers for each of the four cores in the CPU. It has 18 bits of data, where each field is associated with one possible IRQ source. When an IRQ occurs, associated field in this register is set to 1. The CPU can then read this register and know which source an IRQ may have come from. 
+
+<img width="642" height="450" alt="image" src="https://github.com/user-attachments/assets/2fde94ff-fa81-48c6-8737-a46cb62eaec7" />
+
+There's also four congruent registers which serve this exact same purpose but for FIQs. 
+
+### Abstraction 
+
+Let's quickly introduce a basic abstraction for this in our `Interrupts` struct.
+
+```rust
+// Core interrupt sources
+pub const CORE_0_IRQ_SRC:       *const u32 = (QA7_BASE + 0x60) as *const u32;
+pub const CORE_0_FIQ_SRC:       *const u32 = (QA7_BASE + 0x70) as *const u32;
+
+#[repr(u32)]
+#[derive(Copy, Clone, Debug)]
+pub enum InterruptSource {
+    PhysicalSecureTimer = 1 << 0,
+    PhysicalNonSecureTimer = 1 << 1,
+    HypervisorTimer = 1 << 2,
+    VirtualTimer = 1 << 3,
+    Mailbox0 = 1 << 4,
+    Mailbox1 = 1 << 5,
+    Mailbox2 = 1 << 6,
+    Mailbox3 = 1 << 7,
+    GPU = 1 << 8,
+    PMU = 1 << 9,
+    AXI = 1 << 10,
+    LocalTimer = 1 << 11,
+    PeripheralInterrupt = 0x3f << 12, // last 6 bits are for peripheral interrupts
+    // we don't know yet how they are implemented and used so for now i just wrote it this way
+    // so (irq_sources_register_value | PeripheralInterrupt) would give you the entire peripheral
+    // interrupts field.
+}
+```
+
+Then, inside the struct implementation:
+
+```rust
+    pub fn pending_irq() -> u32 {
+        unsafe { read_volatile(CORE_0_IRQ_SRC) }
+    }
+
+    pub fn pending_fiq() -> u32 {
+        unsafe { read_volatile(CORE_0_FIQ_SRC) }
+    }
+
+    pub fn is_irq_pending(source: InterruptSource) -> bool {
+        (Self::pending_irq() & (source as u32)) != 0
+    }
+
+    pub fn is_fiq_pending(source: InterruptSource) -> bool {
+        (Self::pending_fiq() & (source as u32)) != 0
+    }
+```
+
+Now, our interrupts abstraction is ready to handle queries related to IRQ and FIQ identification. We can now go on and create a new branch in the exception handler for an IRQ, and inside it for an IRQ which came from the NSP timer.
+
+### Implementation
+
+Inside `exceptions.rs`
+```rust
+use crate::kernel::interrupts::{Interrupts, InterruptSource};
+```
+And then afterwards, inside the main exception handler function, add a new `match` branch for IRQ type exceptions.
+
+```
+// called by `exceptions.s`
+#[unsafe(no_mangle)]
+pub extern "C" fn handle_exception_el1(ctx: &mut ExceptionContext) {
+    
+    // handling the exception based on the type.
+    match ctx.etype {
+        ExceptionType::_SYNC => handle_sync_exception(ctx),
+        ExceptionType::_IRQ  => handle_irq_exception(ctx),
+        _ => unhandled_exception!(ctx),
+    }
+
+}
+```
+
+Then we will create the needed `handle_irq_exception(ctx)` function as follows:
+
+```rust
+fn handle_irq_exception(ctx: &mut ExceptionContext) -> () {
+    let mut irq_sources: u32 = Interrupts::pending_irq();
+
+    if irq_sources & (InterruptSource::PhysicalNonSecureTimer as u32) != 0 {
+        PhysicalTimer::handle_irq(ctx);
+        irq_sources &= !(InterruptSource::PhysicalNonSecureTimer as u32);
+    }
+
+    if irq_sources > 0 {
+        println!("Other Unhandled IRQ sources pending: {:#x}", irq_sources).unwrap();
+        unhandled_exception!(ctx);
+    }
+}
+```
