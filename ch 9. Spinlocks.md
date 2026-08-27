@@ -1,4 +1,4 @@
-# Spinlocks
+# Chapter 9: Spinlocks
 
 This document aims to describe the inner workings of a spin-lock in AtOS.
 Before discussing that, first we try to motivate the requirement for it, then
