@@ -168,4 +168,67 @@ You may try this out by setting the timer in the kernel rust main. And seeing th
 
 ## Starting the pulse
 
-(to be continued...)
+Now, finally our timer pipeline is complete. We can see a timer go off, and get turned off appropriately. Now, during scheduling what we're going to need is to make the timer go off periodically at a fixed time period. This will end up becoming the heartbeat of our scheduler. Let's say we choose the time period to be 10ms. Then after every 10ms our scheduler will be triggered, whereby it will update saved contexts and then schedule the next appropriate process according to some _scheduling algorithm_.
+
+To make the timer go off periodically it is very simple. You just need to make it so that when the timer goess off, then while handling the IRQ, we also set the timer again to go off in the exact same amount of time as before. 
+
+```rs
+    if irq_sources & (InterruptSource::PhysicalNonSecureTimer as u32) != 0 {
+        PhysicalTimer::set_seconds(1); // disable irq by immedaitely scheduling it into the future
+        PhysicalTimer::disable();
+        println!("[TIMER] The timer just went off!!!!")
+        PhysicalTimer::set_milliseconds(10);
+        PhysicalTimer::enable();
+        irq_sources &= !(InterruptSource::PhysicalNonSecureTimer as u32);
+    }
+```
+
+And now, this timer is going to keep going off every 10ms.
+
+## Scheduler
+
+Finally, we can use the pipeline we have setup and use it to create a working scheduler. 
+
+Let's start off by creating a new module for the scheduler. `srx/kernel/scheduler.rs`. 
+
+```rs
+pub const TIMESLICE_MILISECONDS: u64 = 1; 
+
+// we implement xv6 similar round robin
+
+pub struct Scheduler;
+```
+
+And now, let's first start off by moving the timer going offf handling paprt into the scheduler.
+
+```rs
+impl Scheduler {
+
+    fn reset_timer() {
+        PhysicalTimer::set_milliseconds(TIMESLICE_MILISECONDS);
+        PhysicalTimer::enable();
+    }
+
+}
+```
+
+### Architecture
+
+Now, you probably already have a decent idea  of what we're going to do. But let's go over it before we jump into implementation.
+
+What we have to do is set a timer before running a process. Then when the timer goes off then:
+
+- Safe exception context of the process as a process context to the process table.
+- Go through all the processes in the process table which are waiting to be run.
+- Choose the next process whose turn it is to run next.
+- Overwrite the exception context with the process context of the chosen process.
+  - In essence we are loading the context of this process
+- Then return from exception will cause the chosen process to run from where its context dictates.
+
+In essence, our scheduler is going to hijack the exception handling pipeline to perform context switching. The exception context is what dictates which instruction to return to, what exception level to return to, the process state, etc. So by simply switching the exception context we can switch the process which is going to run after exception return.
+
+This procedure will execute every single time the timer goes off. Therefore the scheduler will be triggered to schedule the next process periodically by the timer. 
+
+How will this process be jumpstarted?
+
+This depends on whether or not we are using virtualization or not. Right now we are working on the physical memory itself, directly. Thus we have more simpler options for starting the scheduler. We are just going to load two processes into memory. Then, set the timer to some amount like 10ms. Proceeded by jumping to one of the two processes. This is going to cause that one process to run while the timer is secretly ticking in the background. And once the timer goes off, the scheduler will be triggered, and the timer pulse will start.
