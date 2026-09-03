@@ -25,3 +25,4 @@
 * [Ch. 7: Timers And Interrupts](ch%207.%20Timers%20And%20Interrupts.md)
 * [Ch. 8: Scheduling](ch%208.%20Scheduling.md)
 * [Ch. 9: Spinlocks](ch%209.%20Spinlocks.md)
+* [Ch. 10: Mutexes](ch%2010.%20Mutexes.md)
