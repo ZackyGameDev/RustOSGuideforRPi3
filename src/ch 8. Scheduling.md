@@ -1,5 +1,3 @@
-## (Below chapter is currently under work)
-
 # Chapter 8: Scheduling
 
 We have already gone over how we can get an interrupt to be triggered in our kernel at a scheduled time duration. We are now going to utilize this new feature to implement a process scheduling system. As we know, your computer CPU can usually only run a single process at a time for *each CPU core*. It only has one program counter register and is able to track only a single "thread" of instructions in memory at once. Then how is it possible that processes in memory seem to be able to run over a hundred processes simultaneously? 
@@ -488,3 +486,168 @@ pub fn the_end() -> ! {
 And with that we have all the methods and functions we really need!
 
 We can finally put them in the places they belong.
+
+Firstly, let's clean up the exception handler for the timer IRQ.
+
+Let's create a new function in the `PhysicalTimer` struct itself to handle IRQs.
+
+```rs
+impl PhysicalTimer {
+    pub fn handle_irq(ctx: &mut ExceptionContext) { 
+        PhysicalTimer::set_seconds(1); // disable irq by immedaitely scheduling it into the future
+        PhysicalTimer::disable();
+
+        Scheduler::timeslice_up();
+        Scheduler::schedule_next(ctx);
+    }
+}
+```
+
+And now, the original IRQ handler can be written as:
+
+```rust
+fn handle_irq_exception(ctx: &mut ExceptionContext) -> () {
+    let mut irq_sources: u32 = Interrupts::pending_irq();
+
+    if irq_sources & (InterruptSource::PhysicalNonSecureTimer as u32) != 0 {
+        PhysicalTimer::handle_irq(ctx);
+        irq_sources &= !(InterruptSource::PhysicalNonSecureTimer as u32);
+    }
+
+    if irq_sources > 0 {
+        println!("Other Unhandled IRQ sources pending: {:#x}", irq_sources).unwrap();
+        unhandled_exception!(ctx);
+    }
+}
+```
+
+Look closely, this is almost our entire pipeline! if a timer goes off, the `PhysicalTimer::handle_irq(ctx)` handles the following:
+- disable timer 
+- `Scheduler::timeslice_up()`: 
+    - mark `RUNNING` process as `READY`
+    - reset timer
+- `Scheduler::schedule_next(ctx)`:
+    - choose next process to schedule
+    - overwrite exception `ctx` with chosen process's context
+
+There is still one thing left however, can you guess what it is? 
+
+Yes, it is the saving of exception context of last running process before we overwrite it.
+
+We will do that part as the first thing in the exception handler itself. The idea is no matter what the cause was, if a user program was interrupted, update its process context. This is so the process context is as up-to-date as possible for any kernel procedure referring to it. 
+
+Firstly a function to check if exception occured in EL0:
+
+```rust
+fn was_from_user_el0(ctx: &ExceptionContext) -> bool {
+    ctx.esource == ExceptionSource::_EL064 
+          || ctx.esource == ExceptionSource::_EL032
+}
+```
+
+And now, we add the following to our exception handler: 
+
+```rust
+
+// called by `exceptions.s`
+#[unsafe(no_mangle)]
+pub extern "C" fn handle_exception_el1(ctx: &mut ExceptionContext) {
+    
+    // if it came from EL0, then we need to update PCB of the process interrupted.
+    if was_from_user_el0(ctx) {
+        let sp_el0: u64;
+        unsafe {
+            // reading sp_el0
+            core::arch::asm!(
+                "mrs {val}, sp_el0",
+                val = out(reg) sp_el0,
+                options(nostack, preserves_flags)
+            )
+        }
+        let new_pctx = ProcessContext::from_ectx(ctx, sp_el0);
+
+        Scheduler::update_last_running_pctx(&new_pctx);
+    }
+
+    // println!("An exception has been detected :D").unwrap();
+    
+    // handling the exception based on the type and source.
+    match ctx.etype {
+        // Rest is same as before...
+```
+
+It's very self explanatory. If exception occured in EL0, then create a new `ProcessContext` object from exception context + SP_EL0 register value. And call `Scheduler::update_last_running_pctx` to write said process context to the appropriate index in the process table. 
+
+Congratulations! Just like that we have officially finished implementing the entire scheduler pipeline! Every time the timer goes off, the scheduler will kick in and switch the context to the next process to run. 
+
+## Starting the Scheduler Loop
+
+Now, to trigger the pipeline to start running, all we have to do is load our processes in the process table using the `load_process` function. And then set the physical timer for the first time. Wait for it to go off and watch the scheduler go!
+
+```rust
+
+// in kernel rust main
+
+    PhysicalTimer::init_irq();
+    Interrupts::daif_unmask_all();
+
+    let process_a_image: &'static [u8] = include_bytes!("user/init.bin");
+    let process_b_image: &'static [u8] = include_bytes!("user/b.bin");
+
+    load_process("init", 0, process_a_image, 0x200000, 0x200274);
+    load_process("process b", 0, process_b_image, 0x500000, 0x500334);
+
+    println!("Starting the scheduler!").unwrap();
+    PhysicalTimer::set_seconds(1);
+    PhysicalTimer::enable();
+
+```
+
+Build, and try running it on QEMU/RPi. You'll see an output such as follows:
+
+```bash
+$ qemu-system-aarch64 -M raspi3b -kernel kernel8.img -serial null -serial stdio
+
+Starting the scheduler!
+hello this code is running in process B!
+hello this code is running in the init program!
+x = x = 1
+x = 2
+process B is done working, it will now loop forever.
+This is b looping forever!
+This is b looping forever!
+This is b looping forever!
+This is b looping forever!
+1
+x = 2
+init program is done working, it will now loop forever.
+This is init looping forever!
+This is init looping forever!
+This is init looping forever!
+This is init looping forever!
+This is b looping forever!
+This is b looping forever!
+This is b looping forever!
+This is b looping forever!
+This is b looping forever!
+This is init looping forever!
+This is init looping forever!
+This is init looping forever!
+This is init looping forever!
+This is init looping forever!
+This is b looping forever!
+This is b looping forever!
+(...truncated)
+```
+
+## Conclusion
+
+Therefore, the output we see shows programs `init` and `b` running alternatively as separate processes. We see a few lines of output from process `init` and a few lines from `b` then again from `init` and so on. Therefore the two process are being switched between repeatedly. Therefore the scheduling procedure has been implemented successfully!
+
+If you create more programs, you can include their binary image the same way as `init.bin` or `b.bin` and load them using `load_process`. Then that new process will also be scheduled according to the *Round Robin* algorithm that we have implemented. Trying this out is left as an exercise for the reader.
+
+## Final codes
+
+Snapshot of the state of the project so far can be found at: 
+
+[github.com/ZackyGameDev/AtOS/tree/aef3fa0c404b7423a9ef92770c3f12e91604708e](https://github.com/ZackyGameDev/AtOS/tree/aef3fa0c404b7423a9ef92770c3f12e91604708e)
