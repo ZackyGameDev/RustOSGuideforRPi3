@@ -99,7 +99,7 @@ use crate::kernel::interrupts::{Interrupts, InterruptSource};
 ```
 And then afterwards, inside the main exception handler function, add a new `match` branch for IRQ type exceptions.
 
-```
+```rust
 // called by `exceptions.s`
 #[unsafe(no_mangle)]
 pub extern "C" fn handle_exception_el1(ctx: &mut ExceptionContext) {
@@ -185,21 +185,152 @@ To make the timer go off periodically it is very simple. You just need to make i
 
 And now, this timer is going to keep going off every 10ms.
 
+## Process B
+
+It's pretty annoying to not just get into it. But there's still one more thing we need to setup before we actually implement a scheduler. Can you guess it? 
+
+We need another process of course! How will we see our scheduler work if there is no other processes to schedule? If there was only a single process running, we'd just be seeing it get interrupted by the timer and then going back to running again like nothing changed.
+
+For this, we will follow the exact same procedure we did for our first process. In your user project, go ahead and create a new Rust program file under the `bin/` directory. Same as our original user program. Let's name it something like `b.rs`.
+
+```rust
+// process B just for the sake of testing the scheduler with init and process B
+
+#![no_std]
+#![no_main]
+
+use user::{entry, println};
+
+fn main() {
+    println!("hello this code is running in process B!").unwrap();
+    
+    let mut x = 1;
+    println!("x = {}", x).unwrap();
+    x += 1;
+    println!("x = {}", x).unwrap();
+    
+    println!("process B is done working, it will now loop forever.").unwrap();
+    loop {println!("This is b looping forever!").unwrap(); core::hint::spin_loop();}
+}
+
+entry!(main);
+```
+
+The code could look like something you can see above. It's just a simple program that alos prints something to the output. The only difference is that it should output something which is different from the original `init` progran we previously wrote. If they both output the same thing it will be difficult to tell their output apart during scheduling tests.
+
+For the init user progran, we're gonna use something like the following:
+
+```rust
+#![no_std]
+#![no_main]
+
+use user::{entry, println};
+
+fn main() {
+    println!("hello this code is running in the init program!").unwrap();
+
+    let mut x = 1;
+    println!("x = {}", x).unwrap();
+    x += 1;
+    println!("x = {}", x).unwrap();
+    
+    println!("init program is done working, it will now loop forever.").unwrap();
+    loop {println!("This is init looping forever!").unwrap(); core::hint::spin_loop();}
+}
+
+entry!(main);
+```
+
+Both are essentially the same, only the output identifies which program is doing the printing. The point is when we test out scheduling, the running program's output will tell us which program is running.
+
+Once both programs are written, you have to compile them to a `.bin` file according to the previous chapters. You may remember that the linker script we used was:
+
+```ld
+ENTRY(_start)
+
+SECTIONS
+{
+    /* once memory virtualization works, i will change this to start at 0x00000000 */
+    . = 0x200000;
+(...)
+```
+
+However, since both programs will need to be loaded into memory at the same time, you cannot load both the programs at the same memory address that literally does not make any physical sense. We will need to load `b` program at some other memory address. Let's say `0x500000`. Therefore, first compile with the original linker script. Then use the `init` ELF produced here to get `init.bin`. But then for `b.bin` image, change linker script to start address layout at `0x500000`. Now compile again, and then use this newly produced `b` ELF for producing the `b.bin` image. This way you have both images which are meant to be placed at different memory addresses. 
+
+You can get the entry point for `b.bin` the same way you got for `init.bin` back in chapter 4. And then in rust main of the kernel, you can use the load_process function we implemented back in chapter 6.
+
+```rust
+    let process_a_image: &'static [u8] = include_bytes!("user/init.bin");
+    let process_b_image: &'static [u8] = include_bytes!("user/b.bin");
+
+    // note from ch6 implementation: load process does not include enter_user() execution
+    load_process("init", 0, process_a_image, 0x200000, 0x200274);
+    load_process("process b", 0, process_b_image, 0x500000, 0x500334); 
+                                                         // 0x500334 is the entry point
+```
+
+Now with that, we have two separate processes loaded into our memory at the same time. Ready to execute. Both are saved in the process table thanks to our `load_process` function. Now all we need to do is jump to one of their entry point addresses with level `EL0`.
+
+That is something our scheduler will do. 
+
+
 ## Scheduler
 
 Finally, we can use the pipeline we have setup and use it to create a working scheduler. 
 
+### Architecture
+
+Now, you probably already have a decent idea  of what we're going to do. But let's go over it before we jump into implementation.
+
+What we have to do is set a timer before running a process. Then when the timer goes off then:
+
+- Save exception context of the process as a process context to the process table.
+- Go through all the processes in the process table which are waiting to be run.
+- Choose the next process whose turn it is to run next.
+- Overwrite the exception context with the process context of the chosen process.
+  - In essence we are loading the context of this process
+- Then return from exception will cause the chosen process to run from where its context dictates.
+
+In essence, our scheduler is going to hijack the exception handling pipeline to perform context switching. The exception context is what dictates which instruction to return to, what exception level to return to, the process state, etc. So by simply switching the exception context we can switch the process which is going to run after exception return. 
+
+Functionality wise this will be achieved by writing a Scheduler class. it will have some method like `Scheduler::schedule_next(&mut ExceptionContext)` which will do all the procedure of choosing next process and overwriting the exception context with said process's context. It should also havev a method for saving last running process's context to corresponding process table entry before the exception context is overwritten.
+
+So something like:
+
+```
+(PSEUDOCODE)
+
+(in exception handler)
+
+if timer went off in EL0: (i.e. timer interrupted user program running)
+    -> the exception context holds the context of the running 
+       process just before it was interrupted.
+    -> so save that as process context in said process's 
+       process table entry.
+    -> change said process's stage from RUNNING to READY.
+    -> now choose which READY process to run next from the process table.
+    -> overwrite exception context with said process's process context.
+    -> set that new process's state to RUNNING
+    -> reset the timer (so pulse continues)
+    -> return from exception.   
+```
+
+We need to create methods in a new Scheduler class that can be called to achieve all these procedures. 
+
 Let's start off by creating a new module for the scheduler. `srx/kernel/scheduler.rs`. 
 
 ```rs
-pub const TIMESLICE_MILISECONDS: u64 = 1; 
+pub static mut CURRENT_PROCESS: usize = 0; // last scheduled process index in process table
+pub const TIMESLICE_MILISECONDS: u64 = 9; 
 
 // we implement xv6 similar round robin
 
 pub struct Scheduler;
 ```
 
-And now, let's first start off by moving the timer going offf handling paprt into the scheduler.
+`CURRENT_PROCESS` is just a variable which will keep track of which process the scheduler scheduled last. We will update this appropriately whenever schedule a new process. Initial value is not important as the scheduler will set it appropriately the moment it is called to schedule the first process.
+
+And now, let's first start off by moving the timer going off handling part into the scheduler.
 
 ```rs
 impl Scheduler {
@@ -212,23 +343,148 @@ impl Scheduler {
 }
 ```
 
-### Architecture
+Next up, let's write the function which will be used to mark last running process from `RUNNING` to `READY`. 
 
-Now, you probably already have a decent idea  of what we're going to do. But let's go over it before we jump into implementation.
+```rs
+    pub fn timeslice_up() {
+        // updating current processs from running to ready.
+        unsafe {
+            if let Some(current_process) = &mut PROCESS_TABLE[CURRENT_PROCESS] {
+                current_process.set_state(ProcessState::Ready);
+            } else {
+                panic!("Current process disappeared for unaccounted reason!");
+            }
+        }
 
-What we have to do is set a timer before running a process. Then when the timer goes off then:
+        Self::reset_timer();
+    }
+```
 
-- Safe exception context of the process as a process context to the process table.
-- Go through all the processes in the process table which are waiting to be run.
-- Choose the next process whose turn it is to run next.
-- Overwrite the exception context with the process context of the chosen process.
-  - In essence we are loading the context of this process
-- Then return from exception will cause the chosen process to run from where its context dictates.
+Therefore when the timer goes off, we will call `Scheduler::timeslice_up()`. Then we will do the rest of the procedure of saving context and scheduling next process.
 
-In essence, our scheduler is going to hijack the exception handling pipeline to perform context switching. The exception context is what dictates which instruction to return to, what exception level to return to, the process state, etc. So by simply switching the exception context we can switch the process which is going to run after exception return.
+Next up, the method for saving the context of the last running process to the process table: 
 
-This procedure will execute every single time the timer goes off. Therefore the scheduler will be triggered to schedule the next process periodically by the timer. 
+```rs
+    pub fn update_last_running_pctx(new_pctx: &ProcessContext) {
+        unsafe {
+            if let Some(current_process) = &mut PROCESS_TABLE[CURRENT_PROCESS] {
+                current_process.set_pctx(*new_pctx);
+            } else {
+                panic!("Last running process disappeared for unaccounted reason!");
+                // panic, because this function is going to only exclusively called
+                // in handle_exception_el1. and ONLY in the case when the exception
+                // came from EL0. which would be our last scheduled user process.
+                // so if for some mysterious reason the process just disappeared
+                // after an exception came from it, we might want kernel to scream.
+            }
+        }
+    }
+```
 
-How will this process be jumpstarted?
+Note that it accepts `ProcessContext` rather than `ExceptionContext`. You could also make it directly accept `ectx` instead of `pctx`, but I choose to do it this way to make it more versatile outside of exception handling pipelines where ectx is not available.
 
-This depends on whether or not we are using virtualization or not. Right now we are working on the physical memory itself, directly. Thus we have more simpler options for starting the scheduler. We are just going to load two processes into memory. Then, set the timer to some amount like 10ms. Proceeded by jumping to one of the two processes. This is going to cause that one process to run while the timer is secretly ticking in the background. And once the timer goes off, the scheduler will be triggered, and the timer pulse will start.
+To catchup, so far our pipeline is looking like:
+
+```
+PSEUDOCODE
+
+exception_handler:
+    
+    if exception occured from EL0: (i.e. user process interrupted) {
+        
+        read value of sp_el0 register (because it is not saved in exception_ctx) 
+        let new_pctx = ProcessContext::from_ectx(exception_ctx, sp_el0);
+
+        Scheduler::update_last_running_pctx(&new_pctx);        
+
+    }
+
+    if exception was timer irq {
+        // turn off timer (so it doesn't keep going off)
+
+        Scheduler::timeslice_up();
+    
+        // choose next process to schedule
+        // overwrite exception.ctx to said process.ctx
+    }
+```
+
+Next up, we need to write the code which will do the last two steps. That is, scheduling the next process.
+
+Let's write a program which will simply choose the next process. It will merely return the index of the chosen process in the process table.
+
+```rust
+    fn choose_next_process() -> Option<usize> {
+        unsafe {
+            // if current progress has not finished its time slice, continue it
+            if let Some(current_process) = PROCESS_TABLE[CURRENT_PROCESS] {
+                if current_process.state == ProcessState::Running {
+                    return Some(CURRENT_PROCESS as usize);
+                }
+            }
+            // otherwise scan forward circularly for next process
+            for i in 1..(MAX_PROCESSES+1) { // +1, so if no other processes are found, it will circle back to current process
+                let idx = (CURRENT_PROCESS + i) % MAX_PROCESSES;
+                if let Some(process) = PROCESS_TABLE[idx] {
+                    if process.state == ProcessState::Ready {
+                        CURRENT_PROCESS = idx;
+                        return Some(idx);
+                    }
+                }
+            }
+        }
+        None
+    }
+```
+
+Firstly let's understand the first if-statement. It merely states that if the last scheduled process is still in RUNNING state, then just choose it again. This is to ensure we don't choose a different process to run while there's already one supposed to be running. You might think this is redundant since we make sure to set the last running process as READY in the `timeslice_up` method. However, adding this guard helps make the code more safe, and more flexible if this function needs to be called in some different situation in the future. 
+
+Next up, the first for loop merely loops through all the process table entries. If there is an entry which is of "READY" state, it is chosen. It also makes sure to start scan from `CURRENT_PROCESS_INDEX + 1`. So the same process is not scheduled again. It scans circularly, up till `CURRENT_PROCESS_INDEX`. So if no process is found, it will ultimately circle back and choose the same process again.
+
+Lastly if there's no processes ready to be run, we return `None`. 
+
+Now, let's write a function to update the exception context according to process choice.
+
+```rust
+    pub fn schedule_next(ectx: &mut ExceptionContext) {
+        if let Some(next_process) = Self::choose_next_process() {
+            Self::load_pctx(next_process, ectx);
+        } else {
+            println!("[SCHEDULER] No process to schedule!").unwrap();
+            the_end();
+        }
+    }
+
+    fn load_pctx(pidx: usize, ectx: &mut ExceptionContext) {
+        unsafe {
+            if let Some(process) = &mut PROCESS_TABLE[pidx] {
+                CURRENT_PROCESS = pidx;
+                process.set_state(ProcessState::Running);
+                ectx.update_from_pctx(&process.pctx);
+                core::arch::asm!("msr SP_EL0, {sp}", sp = in(reg) process.pctx.sp);
+            } else {
+                panic!("in Scheduler::load_pctx(), process not found!");
+                // panic, because this function is only called in schedule() and ONLY after choose_next_process() returns Some(pidx). so if for some mysterious reason the process just disappeared after being chosen, we might want kernel to scream.
+            }
+        }
+    }
+```
+
+This is the function which will be called in the exception handler. The `ExceptionContext` will be passed to it. It uses previous written function to choose the next process, and then loads appropriate process context into the exception context. 
+
+The `SP_EL0` register is not included in the exception context so at every step we're having to set it directly using `asm!` macro. Since the exception handler does not update it. You could however incorporate it into the exception handling pipeline as an exercise. We will do it in this book in a future chapter. 
+
+Also note the function `the_end()`. It stands to reason that if theres no more processes left to schedule, It must mean all processes have terminated and finished working. Therefore if we sense that no process is available to schedule, we do the following:
+
+```rust
+// function is defined in main.rs
+pub fn the_end() -> ! {
+    println!("All processes have completed/terminated.").unwrap();
+    println!("There is nothing left to do. You may power off your device now.").unwrap();
+    loop { core::hint::spin_loop(); }
+}
+```
+
+And with that we have all the methods and functions we really need!
+
+We can finally put them in the places they belong.

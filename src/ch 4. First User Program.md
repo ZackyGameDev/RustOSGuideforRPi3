@@ -95,7 +95,7 @@ Now as for the linker, we need to tell the compiler where we are going to load t
 
 Here is what the linker script looks like 
 
-```
+```ld
 ENTRY(_start)
 
 SECTIONS
